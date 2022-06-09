@@ -43,7 +43,7 @@ class ActorCritic(nn.Module):
                         actor_hidden_dims=[256, 256, 256],
                         critic_hidden_dims=[256, 256, 256],
                         activation='elu',
-                        init_noise_std=1.0,
+                        init_noise_std=0.1,
                         **kwargs):
         if kwargs:
             print("ActorCritic.__init__ got unexpected arguments, which will be ignored: " + str([key for key in kwargs.keys()]))
@@ -60,7 +60,8 @@ class ActorCritic(nn.Module):
         actor_layers.append(activation)
         for l in range(len(actor_hidden_dims)):
             if l == len(actor_hidden_dims) - 1:
-                actor_layers.append(nn.Linear(actor_hidden_dims[l], num_actions))
+                actor_layers.append(nn.Linear(actor_hidden_dims[l], num_actions, bias=True))
+                torch.nn.init.normal_(actor_layers[-1].weight, mean=0.0, std=0.1)
             else:
                 actor_layers.append(nn.Linear(actor_hidden_dims[l], actor_hidden_dims[l + 1]))
                 actor_layers.append(activation)
