@@ -35,6 +35,7 @@ import statistics
 
 from torch.utils.tensorboard import SummaryWriter
 import torch
+import wandb
 
 from rsl_rl.algorithms import PPO
 from rsl_rl.modules import ActorCritic, ActorCriticRecurrent
@@ -83,6 +84,8 @@ class OnPolicyRunner:
     def learn(self, num_learning_iterations, init_at_random_ep_len=False):
         # initialize writer
         if self.log_dir is not None and self.writer is None:
+            wandb.tensorboard.patch(root_logdir=self.log_dir)
+            wandb.init(project=self.log_dir.split('/')[-2])
             self.writer = SummaryWriter(log_dir=self.log_dir, flush_secs=10)
         if init_at_random_ep_len:
             self.env.episode_length_buf = torch.randint_like(self.env.episode_length_buf, high=int(self.env.max_episode_length))
@@ -223,8 +226,8 @@ class OnPolicyRunner:
             }, path)
 
     def load(self, path, load_optimizer=True):
-        loaded_dict = torch.load(path)
-        self.alg.actor_critic.load_state_dict(loaded_dict['model_state_dict'])
+        loaded_dict = torch.load(path, map_location=torch.device('cpu'))
+        self.alg.actor_critic.load_state_dict(loaded_dict['model_state_dict'], strict=False)
         if load_optimizer:
             self.alg.optimizer.load_state_dict(loaded_dict['optimizer_state_dict'])
         self.current_learning_iteration = loaded_dict['iter']
