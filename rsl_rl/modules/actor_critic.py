@@ -69,10 +69,12 @@ class ActorCritic(nn.Module):
                         def __init__(self, in_dim, out_dim):
                             super().__init__()
                             self.heads = nn.ModuleList([nn.Linear(in_dim, i) for i in out_dim])
+                            torch.nn.init.normal_(self.heads[0].weight, mean=0.0, std=1.0)
+                            torch.nn.init.normal_(self.heads[1].weight, mean=0.0, std=0.01)
                         def forward(self, x):
                             return [self.heads[i](x) for i in range(len(self.heads))]
                     actor_layers.append(MultiHeadActor(actor_hidden_dims[l], num_actions))
-                    
+                    self.num_actions = [num_actions[0], 1]
 
             else:
                 actor_layers.append(nn.Linear(actor_hidden_dims[l], actor_hidden_dims[l + 1]))
@@ -144,7 +146,7 @@ class ActorCritic(nn.Module):
                 def sample(self):
                     return torch.cat([dist.sample() for dist in self.dists], dim=-1)
                 def log_prob(self, actions):
-                    actions = torch.split(actions, [12, 1], dim=-1) # HACK (Didn't come up with a more generic way..)
+                    actions = torch.split(actions, self.num_actions, dim=-1)
                     return torch.cat([dist.log_prob(actions[i]).sum(dim=-1, keepdim=True) for i, dist in enumerate(self.dists)], dim=-1)
                 def entropy(self):
                     return torch.cat([dist.entropy().sum(dim=-1, keepdim=True) for dist in self.dists], dim=-1)
