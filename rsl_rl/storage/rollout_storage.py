@@ -57,7 +57,7 @@ class RolloutStorage:
         self.obs_shape = obs_shape
         self.privileged_obs_shape = privileged_obs_shape
         if isinstance(actions_shape[0], list):
-            actions_shape = [15]
+            actions_shape = [12]
         self.actions_shape = actions_shape
 
         # Core
@@ -67,8 +67,8 @@ class RolloutStorage:
         else:
             self.privileged_observations = None
         self.rewards = torch.zeros(num_transitions_per_env, num_envs, 1, device=self.device)
-        if actions_shape[0] == 15:
-            self.actions = torch.zeros(num_transitions_per_env, num_envs, 15+1, device=self.device) # TODO: HACK
+        if actions_shape[0] == 12:
+            self.actions = torch.zeros(num_transitions_per_env, num_envs, 12+1, device=self.device) # TODO: HACK
         else:
             self.actions = torch.zeros(num_transitions_per_env, num_envs, *actions_shape, device=self.device)
         self.dones = torch.zeros(num_transitions_per_env, num_envs, 1, device=self.device).byte()

@@ -144,7 +144,7 @@ class ActorCritic(nn.Module):
                 def sample(self):
                     return torch.cat([dist.sample() for dist in self.dists], dim=-1)
                 def log_prob(self, actions):
-                    actions = torch.split(actions, [15, 1], dim=-1) # HACK (Didn't come up with a more generic way..)
+                    actions = torch.split(actions, [12, 1], dim=-1) # HACK (Didn't come up with a more generic way..)
                     return torch.cat([dist.log_prob(actions[i]).sum(dim=-1, keepdim=True) for i, dist in enumerate(self.dists)], dim=-1)
                 def entropy(self):
                     return torch.cat([dist.entropy().sum(dim=-1, keepdim=True) for dist in self.dists], dim=-1)
