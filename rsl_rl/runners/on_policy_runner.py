@@ -41,6 +41,22 @@ from rsl_rl.algorithms import PPO
 from rsl_rl.modules import ActorCritic, ActorCriticRecurrent
 from rsl_rl.env import VecEnv
 
+def class_to_dict(obj) -> dict:
+    if not  hasattr(obj,"__dict__"):
+        return obj
+    result = {}
+    for key in dir(obj):
+        if key.startswith("_"):
+            continue
+        element = []
+        val = getattr(obj, key)
+        if isinstance(val, list):
+            for item in val:
+                element.append(class_to_dict(item))
+        else:
+            element = class_to_dict(val)
+        result[key] = element
+    return result
 
 class OnPolicyRunner:
 
@@ -54,6 +70,7 @@ class OnPolicyRunner:
         self.alg_cfg = train_cfg["algorithm"]
         self.policy_cfg = train_cfg["policy"]
         self.device = device
+        self.train_cfg = train_cfg
         self.env = env
         if self.env.num_privileged_obs is not None:
             num_critic_obs = self.env.num_privileged_obs 
@@ -83,9 +100,12 @@ class OnPolicyRunner:
     
     def learn(self, num_learning_iterations, init_at_random_ep_len=False):
         # initialize writer
+
         if self.log_dir is not None and self.writer is None:
+            config = self.train_cfg
+            config.update(class_to_dict(self.env.cfg))
             wandb.tensorboard.patch(root_logdir=self.log_dir)
-            wandb.init(project=self.log_dir.split('/')[-2])
+            wandb.init(project=self.log_dir.split('/')[-2], config=config)
             self.writer = SummaryWriter(log_dir=self.log_dir, flush_secs=10)
         if init_at_random_ep_len:
             self.env.episode_length_buf = torch.randint_like(self.env.episode_length_buf, high=int(self.env.max_episode_length))
@@ -229,6 +249,9 @@ class OnPolicyRunner:
 
     def load(self, path, load_optimizer=True):
         loaded_dict = torch.load(path, map_location=torch.device('cpu'))
+        # loaded_dict['model_state_dict'].pop('actor.4.heads.0.weight')
+        # loaded_dict['model_state_dict'].pop('actor.4.heads.0.bias')
+        loaded_dict['model_state_dict'].pop('std')
         self.alg.actor_critic.load_state_dict(loaded_dict['model_state_dict'], strict=False)
         if load_optimizer:
             self.alg.optimizer.load_state_dict(loaded_dict['optimizer_state_dict'])

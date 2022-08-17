@@ -69,7 +69,7 @@ class ActorCritic(nn.Module):
                         def __init__(self, in_dim, out_dim):
                             super().__init__()
                             self.heads = nn.ModuleList([nn.Linear(in_dim, i) for i in out_dim])
-                            torch.nn.init.normal_(self.heads[0].weight, mean=0.0, std=1.0)
+                            torch.nn.init.normal_(self.heads[0].weight, mean=0.0, std=0.01)
                             torch.nn.init.normal_(self.heads[1].weight, mean=0.0, std=0.01)
                         def forward(self, x):
                             return [self.heads[i](x) for i in range(len(self.heads))]
@@ -100,7 +100,7 @@ class ActorCritic(nn.Module):
         if isinstance(num_actions, int):
             self.std = nn.Parameter(init_noise_std * torch.ones(num_actions))
         elif isinstance(num_actions, list):
-            self.std = nn.Parameter(init_noise_std * torch.ones(num_actions[0]))
+            self.std = nn.Parameter(init_noise_std * torch.ones(num_actions[0]), requires_grad=False)
         self.distribution = None
         # disable args validation for speedup
         Normal.set_default_validate_args = False
@@ -148,10 +148,10 @@ class ActorCritic(nn.Module):
                 def log_prob(self, actions):
                     actions = torch.split(actions, [12, 1], dim=-1)
                     # return self.dists[1].log_prob(actions[1]).sum(dim=-1, keepdim=True)
-                    return torch.cat([dist.log_prob(actions[i]).mean(dim=-1, keepdim=True) for i, dist in enumerate(self.dists)], dim=-1)
+                    return torch.cat([dist.log_prob(actions[i]).sum(dim=-1, keepdim=True) for i, dist in enumerate(self.dists)], dim=-1)
                 def entropy(self):
-                    # return self.dists[1].entropy().sum(dim=-1, keepdim=True)
-                    return torch.cat([dist.entropy().mean(dim=-1, keepdim=True) for dist in self.dists], dim=-1)
+                    return self.dists[1].entropy().sum(dim=-1, keepdim=True)
+                    # return torch.cat([dist.entropy().mean(dim=-1, keepdim=True) for dist in self.dists], dim=-1)
                     # entropy = [dist.entropy().sum(dim=-1, keepdim=True) for dist in self.dists]
                     # entropy[1] *= 1e1
                     # return torch.cat(entropy, dim=-1)
@@ -180,7 +180,7 @@ class ActorCritic(nn.Module):
     def act_inference(self, observations):
         actions_mean = self.actor(observations)
         if isinstance(actions_mean, list):
-            # print(torch.softmax(actions_mean[1], dim=-1))
+            print(torch.softmax(actions_mean[1], dim=-1))
             return torch.cat([actions_mean[0], torch.argmax(actions_mean[1], dim=-1, keepdim=True)], dim=-1)
         return actions_mean
 
