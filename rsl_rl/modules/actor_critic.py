@@ -147,8 +147,8 @@ class ActorCritic(nn.Module):
                     return torch.cat([dist.sample() for dist in self.dists], dim=-1)
                 def log_prob(self, actions):
                     actions = torch.split(actions, [12, 1], dim=-1)
-                    # return self.dists[1].log_prob(actions[1]).sum(dim=-1, keepdim=True)
-                    return torch.cat([dist.log_prob(actions[i]).sum(dim=-1, keepdim=True) for i, dist in enumerate(self.dists)], dim=-1)
+                    # return self.dists[0].log_prob(actions[1]).sum(dim=-1, keepdim=True)
+                    return torch.cat([dist.log_prob(actions[i]).mean(dim=-1, keepdim=True) for i, dist in enumerate(self.dists)], dim=-1)
                 def entropy(self):
                     return self.dists[1].entropy().sum(dim=-1, keepdim=True)
                     # return torch.cat([dist.entropy().mean(dim=-1, keepdim=True) for dist in self.dists], dim=-1)
@@ -162,7 +162,7 @@ class ActorCritic(nn.Module):
                 def stddev(self):
                     return self.dists[0].stddev
                 
-            print(torch.softmax(mean[1], dim=-1))
+            # print(torch.softmax(mean[1], dim=-1))
             self.distribution = MultiHeadDistribution([
                                         Normal(mean[0], self.std), 
                                         Categorical(torch.softmax(mean[1], dim=-1).unsqueeze(1))

@@ -249,9 +249,16 @@ class OnPolicyRunner:
 
     def load(self, path, load_optimizer=True):
         loaded_dict = torch.load(path, map_location=torch.device('cpu'))
-        # loaded_dict['model_state_dict'].pop('actor.4.heads.0.weight')
-        # loaded_dict['model_state_dict'].pop('actor.4.heads.0.bias')
-        loaded_dict['model_state_dict'].pop('std')
+        # loaded_dict['model_state_dict'].pop('actor.4.heads.1.weight')
+        # loaded_dict['model_state_dict'].pop('actor.4.heads.1.bias')
+        # loaded_dict['model_state_dict'].pop('std')
+        print(loaded_dict['model_state_dict']['std'])
+        # my_dic_keys = list(loaded_dict['model_state_dict'].keys())
+
+        # for k in my_dic_keys:
+        #     if 'critic' in k:
+        #         loaded_dict['model_state_dict'].pop(k)
+
         self.alg.actor_critic.load_state_dict(loaded_dict['model_state_dict'], strict=False)
         if load_optimizer:
             self.alg.optimizer.load_state_dict(loaded_dict['optimizer_state_dict'])
