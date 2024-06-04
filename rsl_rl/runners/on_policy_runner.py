@@ -11,10 +11,11 @@ from collections import deque
 from torch.utils.tensorboard import SummaryWriter as TensorboardSummaryWriter
 
 import rsl_rl
-from rsl_rl.algorithms import PPO
+from rsl_rl.algorithms import PPO, PPOAug
 from rsl_rl.env import VecEnv
 from rsl_rl.modules import ActorCritic, ActorCriticRecurrent, EmpiricalNormalization
 from rsl_rl.utils import store_code_state
+from omni.isaac.orbit_tasks.utils.wrappers.rsl_rl import export_policy_as_onnx
 
 
 class OnPolicyRunner:
@@ -262,9 +263,16 @@ class OnPolicyRunner:
             saved_dict["critic_obs_norm_state_dict"] = self.critic_obs_normalizer.state_dict()
         torch.save(saved_dict, path)
 
+        directory, name = os.path.split(path)
+        export_model_dir = os.path.join(directory, "exported")
+        export_policy_as_onnx(self.alg.actor_critic, path=export_model_dir, filename="policy.onnx", normalizer=None)
+        onnx_path = os.path.join(export_model_dir, "policy.onnx")
+
+
         # Upload model to external logging service
         if self.logger_type in ["neptune", "wandb"]:
             self.writer.save_model(path, self.current_learning_iteration)
+            self.writer.save_model(onnx_path, self.current_learning_iteration)
 
     def load(self, path, load_optimizer=True):
         loaded_dict = torch.load(path)

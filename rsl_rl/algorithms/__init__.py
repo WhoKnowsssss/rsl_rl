@@ -4,5 +4,5 @@
 """Implementation of different RL agents."""
 
 from .ppo import PPO
-
-__all__ = ["PPO"]
+from .ppoaug import PPOAug
+__all__ = ["PPO", "PPOAug"]
