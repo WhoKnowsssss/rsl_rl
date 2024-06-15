@@ -15,7 +15,7 @@ from rsl_rl.algorithms import PPO, PPOAug
 from rsl_rl.env import VecEnv
 from rsl_rl.modules import ActorCritic, ActorCriticRecurrent, EmpiricalNormalization
 from rsl_rl.utils import store_code_state
-from omni.isaac.orbit_tasks.utils.wrappers.rsl_rl import export_policy_as_onnx
+from omni.isaac.lab_tasks.utils.wrappers.rsl_rl import export_policy_as_onnx
 
 
 class OnPolicyRunner:
