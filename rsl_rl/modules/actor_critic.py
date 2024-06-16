@@ -20,7 +20,7 @@ class ActorCritic(nn.Module):
         num_critic_obs,
         num_actions,
         num_latent,
-        num_history,
+        history_length,
         actor_hidden_dims=[256, 256, 256],
         critic_hidden_dims=[256, 256, 256],
         encoder_hidden_dims=[128, 64],
@@ -37,16 +37,16 @@ class ActorCritic(nn.Module):
         super().__init__()
         activation = get_activation(activation)
 
-        mlp_input_dim_a = (num_actor_obs - 3) // num_history
+        mlp_input_dim_a = (num_actor_obs - 3) // (history_length + 1)
         mlp_input_dim_c = num_critic_obs
 
-        self.num_obs_history = num_history * mlp_input_dim_a
+        self.num_obs_history = history_length * mlp_input_dim_a
         self.num_single_obs = mlp_input_dim_a   
 
         # estimator
         self.estimator = VAE(
             num_single_obs=mlp_input_dim_a,
-            num_obs_history=num_history * mlp_input_dim_a,
+            num_obs_history=history_length * mlp_input_dim_a,
             num_latent=num_latent,
             encoder_hidden_dims=encoder_hidden_dims,
             decoder_hidden_dims=decoder_hidden_dims,
@@ -137,7 +137,7 @@ class ActorCritic(nn.Module):
     def act(self, observations, **kwargs):
         obs_history, curr_obs = (
             observations[:, : self.num_obs_history],
-            observations[:, self.num_obs_history :],
+            observations[:, self.num_obs_history : -3],
         )
         latent, vel = self.estimator.sample(obs_history)
         self.update_distribution(torch.cat([curr_obs, latent, vel], dim=-1))
@@ -149,7 +149,7 @@ class ActorCritic(nn.Module):
     def act_inference(self, observations):
         obs_history, curr_obs = (
             observations[:, : self.num_obs_history],
-            observations[:, self.num_obs_history :],
+            observations[:, self.num_obs_history : -3],
         )
         latent, vel = self.estimator.inference(obs_history)
         actions_mean = self.actor(torch.cat([curr_obs, latent, vel], dim=-1))

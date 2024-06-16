@@ -3,8 +3,6 @@ import torch
 from torch.distributions import Normal
 from torch.nn import functional as F
 
-from .actor_critic import get_activation
-
 
 class VAE(nn.Module):
     def __init__(
@@ -27,7 +25,7 @@ class VAE(nn.Module):
         modules.append(nn.Linear(num_obs_history, encoder_hidden_dims[0]))
         modules.append(activation)
         for l in range(len(encoder_hidden_dims)):
-            if l == len(encoder_hidden_dims) - 2:
+            if l == len(encoder_hidden_dims) - 1:
                 pass
             else:
                 modules.append(
@@ -40,13 +38,13 @@ class VAE(nn.Module):
         self.latent_mu = nn.Linear(encoder_hidden_dims[-1], num_latent)
         self.latent_var = nn.Linear(encoder_hidden_dims[-1], num_latent)
         self.vel_mu = nn.Linear(encoder_hidden_dims[-1], 3)
-        self.vel_var = nn.Linear(encoder_hidden_dims[-1] * 4, 3)
+        self.vel_var = nn.Linear(encoder_hidden_dims[-1], 3)
 
         # Build Decoder
         modules = []
 
         decoder_input_dim = num_latent + 3
-        modules.append(nn.Linear(decoder_input_dim, decoder_input_dim[0]))
+        modules.append(nn.Linear(decoder_input_dim, decoder_hidden_dims[0]))
         modules.append(activation)
         for l in range(len(decoder_hidden_dims)):
             if l == len(decoder_hidden_dims) - 1:
@@ -109,3 +107,23 @@ class VAE(nn.Module):
     def inference(self, obs_history):
         latent_mu, latent_var, vel_mu, vel_var = self.encode(obs_history)
         return latent_mu, vel_mu
+
+
+def get_activation(act_name):
+    if act_name == "elu":
+        return nn.ELU()
+    elif act_name == "selu":
+        return nn.SELU()
+    elif act_name == "relu":
+        return nn.ReLU()
+    elif act_name == "crelu":
+        return nn.CReLU()
+    elif act_name == "lrelu":
+        return nn.LeakyReLU()
+    elif act_name == "tanh":
+        return nn.Tanh()
+    elif act_name == "sigmoid":
+        return nn.Sigmoid()
+    else:
+        print("invalid activation function!")
+        return None
