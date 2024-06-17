@@ -103,7 +103,7 @@ class PPO:
     def process_env_step(self, obs, rewards, dones, infos):
         self.transition.rewards = rewards.clone()
         self.transition.dones = dones
-        self.transition.next_observations = obs
+        self.transition.next_observations = obs.clone()
         # Bootstrapping on time outs
         if "time_outs" in infos:
             self.transition.rewards += self.gamma * torch.squeeze(
@@ -223,10 +223,9 @@ class PPO:
             obs_history_batch = obs_batch[:, : self.actor_critic.num_obs_history]
             next_obs_batch = next_obs_batch[
                 :,
-                self.actor_critic.num_obs_history : self.actor_critic.num_obs_history
-                + self.actor_critic.num_single_obs,
+                self.actor_critic.num_obs_history - self.actor_critic.num_single_obs: self.actor_critic.num_obs_history,
             ]
-            base_vel_batch = next_obs_batch[:, -3:]
+            base_vel_batch = obs_batch[:, -3:]
             for _ in range(self.estimator_learning_steps):
 
                 vae_loss_dict = self.actor_critic.estimator.loss_fn(

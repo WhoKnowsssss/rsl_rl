@@ -148,6 +148,14 @@ class OnPolicyRunner:
                 self.alg.compute_returns(critic_obs)
 
             mean_value_loss, mean_surrogate_loss, mean_recons_loss, mean_vel_loss, mean_kld_loss  = self.alg.update()
+                        
+            if len(rewbuffer) > 0:
+                cv = torch.std(torch.tensor(rewbuffer)) / torch.abs(torch.mean(torch.tensor(rewbuffer)))
+                self.alg.actor_critic.p_sample[:] = 1 - torch.tanh(cv)
+                if it < 1000:
+                    self.alg.actor_critic.p_sample[:] = 0.01
+                p_sample = self.alg.actor_critic.p_sample.cpu().numpy()
+
             stop = time.time()
             learn_time = stop - start
             self.current_learning_iteration = it
@@ -207,6 +215,7 @@ class OnPolicyRunner:
         self.writer.add_scalar("Perf/learning_time", locs["learn_time"], locs["it"])
         if len(locs["rewbuffer"]) > 0:
             self.writer.add_scalar("Train/mean_reward", statistics.mean(locs["rewbuffer"]), locs["it"])
+            self.writer.add_scalar("Policy/p_sample", statistics.mean(locs["p_sample"]), locs["it"])
             self.writer.add_scalar("Train/mean_episode_length", statistics.mean(locs["lenbuffer"]), locs["it"])
             if self.logger_type != "wandb":  # wandb does not support non-integer x-axis logging
                 self.writer.add_scalar("Train/mean_reward/time", statistics.mean(locs["rewbuffer"]), self.tot_time)

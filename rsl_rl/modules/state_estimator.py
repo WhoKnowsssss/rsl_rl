@@ -56,6 +56,9 @@ class VAE(nn.Module):
                 modules.append(activation)
         self.decoder = nn.Sequential(*modules)
 
+        print(f"State Estimator Encoder: {self.encoder}; Output Heads: {self.latent_mu}, {self.vel_mu}")
+        print(f"State Estimator Decoder: {self.decoder}")
+
     def encode(self, obs_history):
         encoded = self.encoder(obs_history)
         latent_mu = self.latent_mu(encoded)
@@ -72,7 +75,7 @@ class VAE(nn.Module):
         latent_mu, latent_var, vel_mu, vel_var = self.encode(obs_history)
         latent = self.reparameterize(latent_mu, latent_var)
         vel = self.reparameterize(vel_mu, vel_var)
-        return latent, vel, latent_mu, latent_var
+        return latent, vel_mu, latent_mu, latent_var
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)

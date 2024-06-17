@@ -8,6 +8,12 @@ import torch
 import torch.nn as nn
 from torch.distributions import Normal
 
+def init_weights(m):
+    if isinstance(m, nn.Linear):
+        torch.nn.init.xavier_uniform(m.weight)
+        m.bias.data.fill_(0.01)
+
+
 from .state_estimator import VAE
 
 
@@ -40,17 +46,20 @@ class ActorCritic(nn.Module):
         mlp_input_dim_a = (num_actor_obs - 3) // (history_length + 1)
         mlp_input_dim_c = num_critic_obs
 
-        self.num_obs_history = history_length * mlp_input_dim_a
+        self.num_obs_history = (history_length + 1) * mlp_input_dim_a
         self.num_single_obs = mlp_input_dim_a   
 
         # estimator
         self.estimator = VAE(
             num_single_obs=mlp_input_dim_a,
-            num_obs_history=history_length * mlp_input_dim_a,
+            num_obs_history=self.num_obs_history,
             num_latent=num_latent,
             encoder_hidden_dims=encoder_hidden_dims,
             decoder_hidden_dims=decoder_hidden_dims,
         )
+
+        self.p_sample = torch.zeros(1)
+
         # Policy
         actor_layers = []
         actor_layers.append(
@@ -98,6 +107,9 @@ class ActorCritic(nn.Module):
         # disable args validation for speedup
         Normal.set_default_validate_args = False
 
+        self.estimator.apply(init_weights)
+        # self.actor.apply(init_weights)
+        # self.critic.apply(init_weights)
         # seems that we get better performance without init
         # self.init_memory_weights(self.memory_a, 0.001, 0.)
         # self.init_memory_weights(self.memory_c, 0.001, 0.)
@@ -136,10 +148,21 @@ class ActorCritic(nn.Module):
 
     def act(self, observations, **kwargs):
         obs_history, curr_obs = (
-            observations[:, : self.num_obs_history],
-            observations[:, self.num_obs_history : -3],
+            observations[:, : -3],
+            observations[:, self.num_obs_history - self.num_single_obs : -3],
         )
+
+        gt_vel = observations[:, -3:]
+
+        batch_size = curr_obs.size(0)
+        p_sample = torch.rand(batch_size) < self.p_sample
+
         latent, vel = self.estimator.sample(obs_history)
+        latent_mu, vel_mu = self.estimator.inference(obs_history)
+        latent[~p_sample] = latent_mu[~p_sample]
+        vel[~p_sample] = vel_mu[~p_sample]
+        # vel[~p_sample] = gt_vel[~p_sample]
+
         self.update_distribution(torch.cat([curr_obs, latent, vel], dim=-1))
         return self.distribution.sample()
 
@@ -148,8 +171,8 @@ class ActorCritic(nn.Module):
 
     def act_inference(self, observations):
         obs_history, curr_obs = (
-            observations[:, : self.num_obs_history],
-            observations[:, self.num_obs_history : -3],
+            observations[:, : -3],
+            observations[:, self.num_obs_history - self.num_single_obs : -3],
         )
         latent, vel = self.estimator.inference(obs_history)
         actions_mean = self.actor(torch.cat([curr_obs, latent, vel], dim=-1))
