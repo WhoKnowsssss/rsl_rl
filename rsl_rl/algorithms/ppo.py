@@ -27,6 +27,7 @@ class PPO:
         learning_rate=1e-3,
         estimator_learning_rate=1e-3,
         estimator_learning_steps=1,
+        kld_weight=1.0,
         max_grad_norm=1.0,
         use_clipped_value_loss=True,
         schedule="fixed",
@@ -50,6 +51,7 @@ class PPO:
         self.estimator_learning_steps = estimator_learning_steps
         self.transition = RolloutStorage.Transition()
 
+        self.kld_weight = kld_weight
         # PPO parameters
         self.clip_param = clip_param
         self.num_learning_epochs = num_learning_epochs
@@ -226,10 +228,13 @@ class PPO:
                 self.actor_critic.num_obs_history - self.actor_critic.num_single_obs: self.actor_critic.num_obs_history,
             ]
             base_vel_batch = obs_batch[:, -3:]
+            curr_action_batch = next_obs_batch[:, -12 : ]
+            next_obs_batch = next_obs_batch[:, : -12]
+            
             for _ in range(self.estimator_learning_steps):
 
                 vae_loss_dict = self.actor_critic.estimator.loss_fn(
-                    obs_history_batch, next_obs_batch, base_vel_batch
+                    obs_history_batch, next_obs_batch, base_vel_batch, curr_action_batch, self.kld_weight
                 )
                 valid = (dones_batch == 0).squeeze()
                 vae_loss = torch.mean(vae_loss_dict["loss"][valid])
@@ -237,7 +242,7 @@ class PPO:
                 self.estimator_optimizer.zero_grad()
                 vae_loss.backward()
                 nn.utils.clip_grad_norm_(
-                    self.actor_critic.estimator.parameters(), self.max_grad_norm
+                    self.actor_critic.estimator.parameters(), 0.1
                 )
                 self.estimator_optimizer.step()
 

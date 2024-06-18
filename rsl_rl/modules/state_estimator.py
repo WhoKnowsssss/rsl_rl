@@ -43,12 +43,12 @@ class VAE(nn.Module):
         # Build Decoder
         modules = []
 
-        decoder_input_dim = num_latent + 3
+        decoder_input_dim = num_latent + 3 + 12
         modules.append(nn.Linear(decoder_input_dim, decoder_hidden_dims[0]))
         modules.append(activation)
         for l in range(len(decoder_hidden_dims)):
             if l == len(decoder_hidden_dims) - 1:
-                modules.append(nn.Linear(decoder_hidden_dims[l], num_single_obs))
+                modules.append(nn.Linear(decoder_hidden_dims[l], num_single_obs - 12))
             else:
                 modules.append(
                     nn.Linear(decoder_hidden_dims[l], decoder_hidden_dims[l + 1])
@@ -67,8 +67,8 @@ class VAE(nn.Module):
         vel_var = self.vel_var(encoded)
         return latent_mu, latent_var, vel_mu, vel_var
 
-    def decode(self, latent, vel):
-        input = torch.cat([latent, vel], dim=-1)
+    def decode(self, latent, vel, curr_action):
+        input = torch.cat([latent, vel, curr_action], dim=-1)
         return self.decoder(input)
 
     def forward(self, obs_history):
@@ -82,10 +82,10 @@ class VAE(nn.Module):
         eps = torch.randn_like(std)
         return mu + eps * std
 
-    def loss_fn(self, obs_history, next_single_obs, gt_vel, kld_weight=1.0):
+    def loss_fn(self, obs_history, next_single_obs, gt_vel, curr_action, kld_weight=1.0):
         latent, vel, latent_mu, latent_var = self.forward(obs_history)
         # Reconstruction loss
-        recons_next_obs = self.decode(latent, vel)
+        recons_next_obs = self.decode(latent, vel, curr_action)
         recons_loss = F.mse_loss(recons_next_obs, next_single_obs, reduction="none").mean(-1)
         # Supervised loss
         vel_loss = F.mse_loss(vel, gt_vel, reduction="none").mean(-1)
@@ -105,10 +105,16 @@ class VAE(nn.Module):
 
     def sample(self, obs_history):
         latent, vel, _, _ = self.forward(obs_history)
+        
+        if torch.any(torch.isnan(latent)):
+            breakpoint()
         return latent, vel
 
     def inference(self, obs_history):
         latent_mu, latent_var, vel_mu, vel_var = self.encode(obs_history)
+        
+        if torch.any(torch.isnan(latent_mu)):
+            breakpoint()
         return latent_mu, vel_mu
 
 

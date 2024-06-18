@@ -4,13 +4,15 @@
 
 from __future__ import annotations
 
+import numpy as np
+
 import torch
 import torch.nn as nn
 from torch.distributions import Normal
 
 def init_weights(m):
     if isinstance(m, nn.Linear):
-        torch.nn.init.xavier_uniform(m.weight)
+        torch.nn.init.xavier_uniform_(m.weight)
         m.bias.data.fill_(0.01)
 
 
@@ -29,8 +31,8 @@ class ActorCritic(nn.Module):
         history_length,
         actor_hidden_dims=[256, 256, 256],
         critic_hidden_dims=[256, 256, 256],
-        encoder_hidden_dims=[128, 64],
-        decoder_hidden_dims=[512, 256, 128],
+        encoder_hidden_dims=[256, 128, 64],
+        decoder_hidden_dims=[64, 128, 256],
         activation="elu",
         init_noise_std=1.0,
         **kwargs,
@@ -102,10 +104,10 @@ class ActorCritic(nn.Module):
         print(f"Critic MLP: {self.critic}")
 
         # Action noise
-        self.std = nn.Parameter(init_noise_std * torch.ones(num_actions))
+        self.logstd = nn.Parameter(np.log(init_noise_std) * torch.ones(num_actions))
         self.distribution = None
         # disable args validation for speedup
-        Normal.set_default_validate_args = False
+        # Normal.set_default_validate_args = False
 
         self.estimator.apply(init_weights)
         # self.actor.apply(init_weights)
@@ -144,7 +146,7 @@ class ActorCritic(nn.Module):
 
     def update_distribution(self, observations):
         mean = self.actor(observations)
-        self.distribution = Normal(mean, mean * 0.0 + self.std)
+        self.distribution = Normal(mean, torch.exp(self.logstd) + 1e-3)
 
     def act(self, observations, **kwargs):
         obs_history, curr_obs = (
@@ -163,8 +165,14 @@ class ActorCritic(nn.Module):
         vel[~p_sample] = vel_mu[~p_sample]
         # vel[~p_sample] = gt_vel[~p_sample]
 
+        latent = latent.detach()
+        vel = vel.detach()
         self.update_distribution(torch.cat([curr_obs, latent, vel], dim=-1))
-        return self.distribution.sample()
+        try:
+            act = self.distribution.sample()
+        except:
+            breakpoint()
+        return act
 
     def get_actions_log_prob(self, actions):
         return self.distribution.log_prob(actions).sum(dim=-1)
@@ -175,6 +183,8 @@ class ActorCritic(nn.Module):
             observations[:, self.num_obs_history - self.num_single_obs : -3],
         )
         latent, vel = self.estimator.inference(obs_history)
+        latent = latent.detach()
+        vel = vel.detach()
         actions_mean = self.actor(torch.cat([curr_obs, latent, vel], dim=-1))
         return actions_mean
 

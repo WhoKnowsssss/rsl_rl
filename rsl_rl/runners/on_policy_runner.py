@@ -152,8 +152,8 @@ class OnPolicyRunner:
             if len(rewbuffer) > 0:
                 cv = torch.std(torch.tensor(rewbuffer)) / torch.abs(torch.mean(torch.tensor(rewbuffer)))
                 self.alg.actor_critic.p_sample[:] = 1 - torch.tanh(cv)
-                if it < 1000:
-                    self.alg.actor_critic.p_sample[:] = 0.01
+                if True:
+                    self.alg.actor_critic.p_sample[:] = 0.
                 p_sample = self.alg.actor_critic.p_sample.cpu().numpy()
 
             stop = time.time()
@@ -200,7 +200,7 @@ class OnPolicyRunner:
                 else:
                     self.writer.add_scalar("Episode/" + key, value, locs["it"])
                     ep_string += f"""{f'Mean episode {key}:':>{pad}} {value:.4f}\n"""
-        mean_std = self.alg.actor_critic.std.mean()
+        mean_std = self.alg.actor_critic.logstd.mean()
         fps = int(self.num_steps_per_env * self.env.num_envs / (locs["collection_time"] + locs["learn_time"]))
 
         self.writer.add_scalar("Loss/value_function", locs["mean_value_loss"], locs["it"])
