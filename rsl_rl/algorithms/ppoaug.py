@@ -34,7 +34,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from rsl_rl.modules.actor_critic import ActorCritic
-from rsl_rl.storage.rollout_storage import RolloutStorage
+from rsl_rl.storage import RolloutStorage
 
 
 class PPOAug:
@@ -108,6 +108,11 @@ class PPOAug:
         self.priv_obs_reflect_op = self.obs_reflect_op
 
         self.actions_reflect_op = self.Q.clone().to(self.device)
+
+        print("\n\n\n\nUsing PPO Augmented!!!!!!!!!\n\n\n\n")
+
+
+        
 
     def get_reflect_op(self, reps):
         reps_shape = []
