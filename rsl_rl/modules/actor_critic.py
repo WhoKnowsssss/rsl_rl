@@ -115,6 +115,7 @@ class ActorCritic(nn.Module):
         else:
             raise ValueError(f"Unknown standard deviation type: {self.noise_std_type}. Should be 'scalar' or 'log'")
         # create distribution
+        # std = torch.clamp(std, min=0.3)
         self.distribution = Normal(mean, std)
 
     def act(self, observations, **kwargs):

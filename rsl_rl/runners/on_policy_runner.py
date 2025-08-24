@@ -20,6 +20,7 @@ from rsl_rl.modules import (
     EmpiricalNormalization,
     StudentTeacher,
     StudentTeacherRecurrent,
+    StudentTeacherVAE,
 )
 from rsl_rl.utils import store_code_state
 
@@ -69,7 +70,7 @@ class OnPolicyRunner:
 
         # evaluate the policy class
         policy_class = eval(self.policy_cfg.pop("class_name"))
-        policy: ActorCritic | ActorCriticRecurrent | StudentTeacher | StudentTeacherRecurrent = policy_class(
+        policy: ActorCritic | ActorCriticRecurrent | StudentTeacher | StudentTeacherRecurrent | StudentTeacherVAE = policy_class(
             num_obs, num_privileged_obs, self.env.num_actions, **self.policy_cfg
         ).to(self.device)
 
@@ -257,7 +258,7 @@ class OnPolicyRunner:
                     self.alg.compute_returns(privileged_obs)
 
             # update policy
-            loss_dict = self.alg.update()
+            loss_dict = self.alg.update(it, tot_iter)
 
             stop = time.time()
             learn_time = stop - start

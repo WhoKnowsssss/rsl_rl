@@ -183,7 +183,7 @@ class PPO:
             last_values, self.gamma, self.lam, normalize_advantage=not self.normalize_advantage_per_mini_batch
         )
 
-    def update(self):  # noqa: C901
+    def update(self, *args):  # noqa: C901
         mean_value_loss = 0
         mean_surrogate_loss = 0
         mean_entropy = 0

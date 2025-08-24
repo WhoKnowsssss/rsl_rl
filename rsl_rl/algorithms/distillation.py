@@ -25,6 +25,9 @@ class Distillation:
         num_learning_epochs=1,
         gradient_length=15,
         learning_rate=1e-3,
+        kl_coeff_start=1e-7,
+        kl_coeff_end=5e-8,
+        consistency_coeff=0.005,
         loss_type="mse",
         device="cpu",
         # Distributed training parameters
@@ -47,7 +50,10 @@ class Distillation:
         self.policy = policy
         self.policy.to(self.device)
         self.storage = None  # initialized later
-        self.optimizer = optim.Adam(self.policy.student.parameters(), lr=learning_rate)
+        self.optimizer = optim.AdamW(
+            list(self.policy.student_encoder.parameters()) + list(self.policy.student_decoder.parameters()), 
+            lr=learning_rate
+        )
         self.transition = RolloutStorage.Transition()
         self.last_hidden_states = None
 
@@ -65,6 +71,9 @@ class Distillation:
             raise ValueError(f"Unknown loss type: {loss_type}. Supported types are: mse, huber")
 
         self.num_updates = 0
+        self.kl_coeff_start = kl_coeff_start
+        self.kl_coeff_end = kl_coeff_end
+        self.consistency_coeff = consistency_coeff
 
     def init_storage(
         self, training_type, num_envs, num_transitions_per_env, student_obs_shape, teacher_obs_shape, actions_shape
@@ -89,6 +98,20 @@ class Distillation:
         self.transition.observations = obs
         self.transition.privileged_observations = teacher_obs
         return self.transition.actions
+    
+    def update_kl_coeff(self, current_learning_iteration, total_iterations):
+        """Update the KL coefficient based on the current iteration."""
+        progress = current_learning_iteration / total_iterations
+        if progress >= 0.25 and progress <= 0.5:
+            # Linearly interpolate between kl_coeff_start and kl_coeff_end
+            alpha = (progress - 0.25) / 0.25
+            self.kl_coeff = self.kl_coeff_start * (1 - alpha) + self.kl_coeff_end * alpha
+        elif progress > 0.5:
+            # Keep it at kl_coeff_end after 50% of total iterations
+            self.kl_coeff = self.kl_coeff_end
+        else:
+            # Before 25% of total iterations, keep it at kl_coeff_start
+            self.kl_coeff = self.kl_coeff_start
 
     def process_env_step(self, rewards, dones, infos):
         # record the rewards and dones
@@ -99,26 +122,51 @@ class Distillation:
         self.transition.clear()
         self.policy.reset(dones)
 
-    def update(self):
+    def vae_losses(
+        self,
+        logvar, mu
+    ):
+        kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        return kl_loss
+
+    def consistency_losses(
+        self,
+        last_u, current_u
+    ):  
+        if last_u is None:
+            return torch.tensor(0.0, device=self.device)
+        consistency_loss = nn.functional.mse_loss(current_u, last_u)
+        return consistency_loss
+    
+    def update(self, current_learning_iteration, total_iterations):  # noqa: C901
+        
         self.num_updates += 1
         mean_behavior_loss = 0
         loss = 0
         cnt = 0
 
+        self.update_kl_coeff(current_learning_iteration, total_iterations)
+
         for epoch in range(self.num_learning_epochs):
             self.policy.reset(hidden_states=self.last_hidden_states)
             self.policy.detach_hidden_states()
+            self.policy.clear_last_u()
             for obs, _, _, privileged_actions, dones in self.storage.generator():
 
                 # inference the student for gradient computation
                 actions = self.policy.act_inference(obs)
 
+                vae_loss = self.vae_losses(self.policy.action_mean, 2 * torch.log(self.policy.action_std + 1e-6))
+                consistency_loss = self.consistency_losses(self.policy.last_u, self.policy.action_mean)
+
                 # behavior cloning loss
                 behavior_loss = self.loss_fn(actions, privileged_actions)
 
                 # total loss
-                loss = loss + behavior_loss
+                loss = loss + behavior_loss + self.kl_coeff * vae_loss + self.consistency_coeff * consistency_loss
                 mean_behavior_loss += behavior_loss.item()
+                # vae_loss += vae_loss.item()
+                # consistency_loss += consistency_loss.item()
                 cnt += 1
 
                 # gradient step
@@ -141,7 +189,11 @@ class Distillation:
         self.policy.detach_hidden_states()
 
         # construct the loss dictionary
-        loss_dict = {"behavior": mean_behavior_loss}
+        loss_dict = {"behavior": mean_behavior_loss, 
+                     "kl": vae_loss / cnt, 
+                     "consistency": consistency_loss / cnt,
+                     "kl_coeff": self.kl_coeff
+                    }
 
         return loss_dict
 
