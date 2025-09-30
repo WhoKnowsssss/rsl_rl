@@ -25,8 +25,8 @@ class Distillation:
         num_learning_epochs=1,
         gradient_length=15,
         learning_rate=1e-3,
-        kl_coeff_start=1e-7,
-        kl_coeff_end=5e-8,
+        kl_coeff_start=1e-6,
+        kl_coeff_end=1e-7,
         consistency_coeff=0.005,
         loss_type="mse",
         device="cpu",
@@ -154,7 +154,7 @@ class Distillation:
             for obs, _, _, privileged_actions, dones in self.storage.generator():
 
                 # inference the student for gradient computation
-                actions = self.policy.act_inference(obs)
+                actions = self.policy.act(obs)
 
                 vae_loss = self.vae_losses(self.policy.action_mean, 2 * torch.log(self.policy.action_std + 1e-6))
                 consistency_loss = self.consistency_losses(self.policy.last_u, self.policy.action_mean)

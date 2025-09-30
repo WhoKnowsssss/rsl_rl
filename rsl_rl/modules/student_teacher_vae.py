@@ -136,11 +136,12 @@ class StudentTeacher(nn.Module):
 
     def act_inference(self, observations):
         self.update_distribution(observations)
-        z = self.distribution.rsample()
-        # z = self.distribution.mean
+        # z = self.distribution.rsample()
+        z = self.distribution.mean
         decoder_obs = observations[..., self.vae_obs_shape:]
         z_obs = torch.cat([z, decoder_obs], dim=-1)
         action = self.student_decoder(z_obs)
+        self.z = z
         # action = self.student_decoder(observations)
         return action
 
