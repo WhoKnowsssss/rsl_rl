@@ -176,10 +176,7 @@ class Distillation:
             for obs, _, _, privileged_actions, dones in self.storage.generator():
                 
                 # -------------------------- write symmetry augmentation here --------------------------
-                obs_aug, privileged_actions_aug = self.symmetric_augment(obs, privileged_actions)
-                obs = torch.cat([obs, obs_aug], dim=0)
-                privileged_actions = torch.cat([privileged_actions, privileged_actions_aug], dim=0)
-
+                obs, privileged_actions = self.symmetric_augment(obs, privileged_actions)
                 # inference the student for gradient computation
                 actions = self.policy.act(obs)
 
