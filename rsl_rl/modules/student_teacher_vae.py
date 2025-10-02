@@ -71,7 +71,7 @@ class StudentTeacher(nn.Module):
 
         # teacher
         teacher_layers = []
-        teacher_layers.append(nn.Linear(mlp_input_dim_t, teacher_hidden_dims[0]))
+        teacher_layers.append(nn.Linear(mlp_input_dim_t - 1, teacher_hidden_dims[0]))
         teacher_layers.append(activation)
         for layer_index in range(len(teacher_hidden_dims)):
             if layer_index == len(teacher_hidden_dims) - 1:

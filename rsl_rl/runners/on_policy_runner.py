@@ -102,7 +102,7 @@ class OnPolicyRunner:
         self.empirical_normalization = self.cfg["empirical_normalization"]
         if self.empirical_normalization:
             self.obs_normalizer = EmpiricalNormalization(shape=[num_obs], until=1.0e8).to(self.device)
-            self.privileged_obs_normalizer = EmpiricalNormalization(shape=[num_privileged_obs], until=1.0e8).to(
+            self.privileged_obs_normalizer = EmpiricalNormalization(shape=[num_privileged_obs - 1], until=1.0e8).to(
                 self.device
             )
         else:

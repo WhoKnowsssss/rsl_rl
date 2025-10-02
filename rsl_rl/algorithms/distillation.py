@@ -24,9 +24,9 @@ class Distillation:
         policy,
         num_learning_epochs=1,
         gradient_length=15,
-        learning_rate=1e-3,
-        kl_coeff_start=1e-6,
-        kl_coeff_end=1e-7,
+        learning_rate=5e-4,
+        kl_coeff_start=1e-2,
+        kl_coeff_end=1e-3,
         consistency_coeff=0.005,
         loss_type="mse",
         device="cpu",
@@ -74,6 +74,23 @@ class Distillation:
         self.kl_coeff_start = kl_coeff_start
         self.kl_coeff_end = kl_coeff_end
         self.consistency_coeff = consistency_coeff
+
+        self.obs_reflect_op, self.action_reflect_op = self.get_reflection_ops()
+
+    def get_reflection_ops(self):
+        """Get reflection operations for symmetry augmentation"""
+        from rsl_rl.algorithms.symm_utils import get_reflect_op, get_reflect_reps, BODY_NAMES, JOINT_NAMES
+        Q, Rd, Rd_pseudo, Q_Rd, Q_Rd_pseudo, num_bodies = get_reflect_reps(BODY_NAMES, JOINT_NAMES)
+
+        Q_Rd_pseudo = Q_Rd_pseudo.view(num_bodies, 3, num_bodies, 3)
+        
+        obs_reflect_reps = [Q] * 10 + [Rd] * 3 + [Rd, Rd_pseudo] * 3 + [Rd] + [Rd_pseudo] * 2 + [Q] * 3
+        # note: for rot6d, use [Rd, Rd_pseudo] to reflect
+        action_reflect_reps = [Q]
+
+        obs_reflect_op = get_reflect_op(obs_reflect_reps).to(torch.float32).to(self.device)
+        action_reflect_op = get_reflect_op(action_reflect_reps).to(torch.float32).to(self.device)
+        return obs_reflect_op, action_reflect_op
 
     def init_storage(
         self, training_type, num_envs, num_transitions_per_env, student_obs_shape, teacher_obs_shape, actions_shape
@@ -126,7 +143,7 @@ class Distillation:
         self,
         logvar, mu
     ):
-        kl_loss = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
         return kl_loss
 
     def consistency_losses(
@@ -137,6 +154,11 @@ class Distillation:
             return torch.tensor(0.0, device=self.device)
         consistency_loss = nn.functional.mse_loss(current_u, last_u)
         return consistency_loss
+    
+    def symmetric_augment(self, obs, action):
+        obs = torch.cat([obs, obs @ self.obs_reflect_op], dim=0)
+        action = torch.cat([action, action @ self.action_reflect_op], dim=0)
+        return obs, action
     
     def update(self, current_learning_iteration, total_iterations):  # noqa: C901
         
@@ -152,6 +174,11 @@ class Distillation:
             self.policy.detach_hidden_states()
             self.policy.clear_last_u()
             for obs, _, _, privileged_actions, dones in self.storage.generator():
+                
+                # -------------------------- write symmetry augmentation here --------------------------
+                obs_aug, privileged_actions_aug = self.symmetric_augment(obs, privileged_actions)
+                obs = torch.cat([obs, obs_aug], dim=0)
+                privileged_actions = torch.cat([privileged_actions, privileged_actions_aug], dim=0)
 
                 # inference the student for gradient computation
                 actions = self.policy.act(obs)
@@ -165,8 +192,8 @@ class Distillation:
                 # total loss
                 loss = loss + behavior_loss + self.kl_coeff * vae_loss + self.consistency_coeff * consistency_loss
                 mean_behavior_loss += behavior_loss.item()
-                # vae_loss += vae_loss.item()
-                # consistency_loss += consistency_loss.item()
+                vae_loss += vae_loss.item()
+                consistency_loss += consistency_loss.item()
                 cnt += 1
 
                 # gradient step
