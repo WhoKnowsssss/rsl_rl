@@ -206,7 +206,16 @@ class OnPolicyRunner:
                     # Move to device
                     obs, rewards, dones = (obs.to(self.device), rewards.to(self.device), dones.to(self.device))
                     # perform normalization
-                    obs = self.obs_normalizer(obs)
+
+                    # ------------------- Consider Symmetry in Normalization -------------------
+                    if hasattr(self.alg, "obs_reflect_op"):
+                        obs = torch.cat([obs, obs @ self.alg.obs_reflect_op], dim=0)
+                        obs = self.obs_normalizer(obs)
+                        obs = obs[:obs.shape[0] // 2]
+                    else:
+                        raise Exception("Not implemented for non-symmetric policies.")
+                        obs = self.obs_normalizer(obs)
+                    # ----------------------------------------------------------------------------
                     if self.privileged_obs_type is not None:
                         privileged_obs = self.privileged_obs_normalizer(
                             infos["observations"][self.privileged_obs_type].to(self.device)
