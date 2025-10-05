@@ -84,7 +84,9 @@ class Distillation:
 
         Q_Rd_pseudo = Q_Rd_pseudo.view(num_bodies, 3, num_bodies, 3)
         
-        obs_reflect_reps = [Q] * 10 + [Rd] * 3 + [Rd, Rd_pseudo] * 3 + [Rd] + [Rd_pseudo] * 2 + [Q] * 3
+        # first line: encoder, second line: decoder and prior
+        obs_reflect_reps = [Q] * 10 + [Rd] * 1 + [Rd, Rd_pseudo] * 1 + [Rd] * 14 + [Rd, Rd_pseudo] * 14 + [Rd] + [Rd_pseudo] + [Q] * 3 \
+                         + [Rd] + [Rd_pseudo] * 2 + [Q] * 3
         # note: for rot6d, use [Rd, Rd_pseudo] to reflect
         action_reflect_reps = [Q]
 
@@ -141,7 +143,7 @@ class Distillation:
 
     def vae_losses(
         self,
-        logvar, mu
+        mu, logvar
     ):
         kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
         return kl_loss
