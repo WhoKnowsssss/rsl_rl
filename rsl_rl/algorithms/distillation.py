@@ -80,18 +80,13 @@ class Distillation:
     def get_reflection_ops(self):
         """Get reflection operations for symmetry augmentation"""
         from rsl_rl.algorithms.symm_utils import get_reflect_op, get_reflect_reps, BODY_NAMES, JOINT_NAMES
-        Q, Rd, Rd_pseudo, Q_Rd, Q_Rd_pseudo, num_bodies = get_reflect_reps(BODY_NAMES, JOINT_NAMES)
+        Q, Rd, Rd_pseudo, Q_Rd, Q_Rd_pseudo, Q_Rd_pseudo_rot6d, num_bodies = get_reflect_reps(BODY_NAMES, JOINT_NAMES)
 
         Q_Rd_pseudo = Q_Rd_pseudo.view(num_bodies, 3, num_bodies, 3)
         Q_Rd = Q_Rd.view(num_bodies, 3, num_bodies, 3)
         
         # obs_reflect_reps = [Q] * 10 + [Rd] * 1 + [Rd, Rd_pseudo] * 1 + [Rd] + [Rd_pseudo] * 2 + [Q] * 3
         # # first line: encoder, second line: decoder and prior
-        Q_Rd_pseudo_rot6d = torch.zeros(6 * num_bodies, 6 * num_bodies)
-        for i in range(num_bodies):
-            for j in range(num_bodies):
-                Q_Rd_pseudo_rot6d[6 * i : 6 * i + 3, 6 * j : 6 * j + 3] = Q_Rd[i, :, j, :]
-                Q_Rd_pseudo_rot6d[6 * i + 3 : 6 * i + 6, 6 * j + 3 : 6 * j + 6] = Q_Rd_pseudo[i, :, j, :]
 
         Q_Rd = Q_Rd.view(num_bodies* 3, num_bodies* 3)
         obs_reflect_reps = [Q] * 10 + [Rd] * 1 + [Rd, Rd_pseudo] * 1 + [Q_Rd] + [Q_Rd_pseudo_rot6d] + [Rd] + [Rd_pseudo] + [Q] * 3 \

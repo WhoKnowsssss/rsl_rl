@@ -167,5 +167,11 @@ def get_reflect_reps(body_names, joint_names):
     Q_Rd_pseudo = torch.zeros((len(bperm), len(bperm), 3, 3))
     Q_Rd_pseudo[torch.arange(len(bperm)), bperm] = Rd_pseudo[None,:,:].repeat(len(bperm), 1, 1)
     Q_Rd_pseudo = Q_Rd_pseudo.permute(0,2,1,3).reshape(len(bperm)*3,len(bperm)*3)
-    return Q, Rd, Rd_pseudo, Q_Rd, Q_Rd_pseudo, len(bperm)
+
+    Q_Rd_pseudo_rot6d = torch.zeros((len(bperm), len(bperm), 6, 6))
+    Rd_pseudo_6d = torch.eye(6)
+    Rd_pseudo_6d[[1, 3, 5], [1, 3, 5]] = -1
+    Q_Rd_pseudo_rot6d[torch.arange(len(bperm)), bperm] = Rd_pseudo_6d[None,:,:].repeat(len(bperm), 1, 1)
+    Q_Rd_pseudo_rot6d = Q_Rd_pseudo_rot6d.permute(0,2,1,3).reshape(len(bperm)*6,len(bperm)*6)
+    return Q, Rd, Rd_pseudo, Q_Rd, Q_Rd_pseudo, Q_Rd_pseudo_rot6d, len(bperm)
 
