@@ -25,8 +25,8 @@ class Distillation:
         num_learning_epochs=1,
         gradient_length=15,
         learning_rate=5e-4,
-        kl_coeff_start=1e-2,
-        kl_coeff_end=1e-3,
+        kl_coeff_start=1e-3,
+        kl_coeff_end=1e-4,
         consistency_coeff=0.005,
         loss_type="mse",
         device="cpu",
@@ -83,9 +83,18 @@ class Distillation:
         Q, Rd, Rd_pseudo, Q_Rd, Q_Rd_pseudo, num_bodies = get_reflect_reps(BODY_NAMES, JOINT_NAMES)
 
         Q_Rd_pseudo = Q_Rd_pseudo.view(num_bodies, 3, num_bodies, 3)
+        Q_Rd = Q_Rd.view(num_bodies, 3, num_bodies, 3)
         
-        # first line: encoder, second line: decoder and prior
-        obs_reflect_reps = [Q] * 10 + [Rd] * 1 + [Rd, Rd_pseudo] * 1 + [Rd] * 14 + [Rd, Rd_pseudo] * 14 + [Rd] + [Rd_pseudo] + [Q] * 3 \
+        # obs_reflect_reps = [Q] * 10 + [Rd] * 1 + [Rd, Rd_pseudo] * 1 + [Rd] + [Rd_pseudo] * 2 + [Q] * 3
+        # # first line: encoder, second line: decoder and prior
+        Q_Rd_pseudo_rot6d = torch.zeros(6 * num_bodies, 6 * num_bodies)
+        for i in range(num_bodies):
+            for j in range(num_bodies):
+                Q_Rd_pseudo_rot6d[6 * i : 6 * i + 3, 6 * j : 6 * j + 3] = Q_Rd[i, :, j, :]
+                Q_Rd_pseudo_rot6d[6 * i + 3 : 6 * i + 6, 6 * j + 3 : 6 * j + 6] = Q_Rd_pseudo[i, :, j, :]
+
+        Q_Rd = Q_Rd.view(num_bodies* 3, num_bodies* 3)
+        obs_reflect_reps = [Q] * 10 + [Rd] * 1 + [Rd, Rd_pseudo] * 1 + [Q_Rd] + [Q_Rd_pseudo_rot6d] + [Rd] + [Rd_pseudo] + [Q] * 3 \
                          + [Rd] + [Rd_pseudo] * 2 + [Q] * 3
         # note: for rot6d, use [Rd, Rd_pseudo] to reflect
         action_reflect_reps = [Q]
