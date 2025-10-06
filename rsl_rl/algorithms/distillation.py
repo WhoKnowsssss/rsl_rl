@@ -161,9 +161,10 @@ class Distillation:
         consistency_loss = nn.functional.mse_loss(current_u, last_u)
         return consistency_loss
     
-    def symmetric_augment(self, obs, action):
+    def symmetric_augment(self, obs, action=None):
         obs = torch.cat([obs, obs @ self.obs_reflect_op], dim=0)
-        action = torch.cat([action, action @ self.action_reflect_op], dim=0)
+        if action is not None:
+            action = torch.cat([action, action @ self.action_reflect_op], dim=0)
         return obs, action
     
     def update(self, current_learning_iteration, total_iterations):  # noqa: C901
