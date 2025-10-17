@@ -57,6 +57,26 @@ class StudentTeacher(nn.Module):
                 student_layers.append(activation)
         self.student_encoder = nn.Sequential(*student_layers)
 
+        # student_layers = []
+        # student_layers.append(nn.Linear(mlp_input_dim_s - vae_obs_shape, student_decoder_dims[0]))
+        # # student_layers.append(nn.Linear(mlp_input_dim_s, student_decoder_dims[0]))
+        # student_layers.append(activation)
+        # for layer_index in range(len(student_decoder_dims)):
+        #     if layer_index == len(student_decoder_dims) - 1:
+        #         student_layers.append(nn.Linear(student_decoder_dims[layer_index], latent_dim * 2))
+        #     else:
+        #         student_layers.append(nn.Linear(student_decoder_dims[layer_index], student_decoder_dims[layer_index + 1]))
+        #         student_layers.append(activation)
+        # self.student_prior = nn.Sequential(*student_layers)
+
+        # # Initialize prior weights with Xavier uniform
+        # for layer in self.student_prior:
+        #     if isinstance(layer, nn.Linear):
+        #         nn.init.xavier_uniform_(layer.weight, gain=0.01)
+        #     if layer.bias is not None:
+        #         nn.init.zeros_(layer.bias)
+
+
         student_layers = []
         student_layers.append(nn.Linear(latent_dim + mlp_input_dim_s - vae_obs_shape, student_decoder_dims[0]))
         # student_layers.append(nn.Linear(mlp_input_dim_s, student_decoder_dims[0]))
@@ -124,6 +144,14 @@ class StudentTeacher(nn.Module):
     @property
     def action_std(self):
         return self.distribution.stddev
+    
+    @property
+    def prior_mean(self):
+        return self.prior_distribution.mean
+    
+    @property
+    def prior_std(self):
+        return self.prior_distribution.stddev
 
     @property
     def entropy(self):
@@ -142,6 +170,11 @@ class StudentTeacher(nn.Module):
         # vae_obs = observations
         mean_logvar = self.student_encoder(vae_obs)
         mean, logvar = torch.split(mean_logvar, [self.latent_dim, self.latent_dim], dim=-1)
+
+        # prior_obs = observations[..., self.vae_obs_shape:]
+        # prior_mean_logvar = self.student_prior(prior_obs)
+        # prior_mean, prior_logvar = torch.split(prior_mean_logvar, [self.latent_dim, self.latent_dim], dim=-1)
+
         std = torch.exp(0.5 * logvar)
         self.distribution = Normal(mean, std)
 
@@ -205,8 +238,8 @@ class StudentTeacher(nn.Module):
             self.teacher.eval()
             return False
         if any("student" in key for key in state_dict.keys()):  # loading parameters from distillation training
-            # state_dict = {key: value for key, value in state_dict.items() if "encoder" not in key}
             super().load_state_dict(state_dict, strict=False)
+            # set flag for successfully loading the parameters
             self.loaded_teacher = True
             self.teacher.eval()
             return True
