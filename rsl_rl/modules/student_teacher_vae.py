@@ -27,6 +27,7 @@ class StudentTeacher(nn.Module):
         teacher_hidden_dims=[256, 256, 256],
         activation="elu",
         init_noise_std=0.1,
+        use_learnable_prior=False,
         **kwargs,
     ):
         if kwargs:
@@ -56,19 +57,18 @@ class StudentTeacher(nn.Module):
                 student_layers.append(nn.Linear(student_encoder_dims[layer_index], student_encoder_dims[layer_index + 1]))
                 student_layers.append(activation)
         self.student_encoder = nn.Sequential(*student_layers)
-
-        # student_layers = []
-        # student_layers.append(nn.Linear(mlp_input_dim_s - vae_obs_shape, student_decoder_dims[0]))
-        # # student_layers.append(nn.Linear(mlp_input_dim_s, student_decoder_dims[0]))
-        # student_layers.append(activation)
-        # for layer_index in range(len(student_decoder_dims)):
-        #     if layer_index == len(student_decoder_dims) - 1:
-        #         student_layers.append(nn.Linear(student_decoder_dims[layer_index], latent_dim * 2))
-        #     else:
-        #         student_layers.append(nn.Linear(student_decoder_dims[layer_index], student_decoder_dims[layer_index + 1]))
-        #         student_layers.append(activation)
-        # self.student_prior = nn.Sequential(*student_layers)
-
+        self.use_learnable_prior = use_learnable_prior
+        if use_learnable_prior:
+            student_layers = []
+            student_layers.append(nn.Linear(mlp_input_dim_s - vae_obs_shape, student_decoder_dims[0]))
+            student_layers.append(activation)
+            for layer_index in range(len(student_decoder_dims)):
+                if layer_index == len(student_decoder_dims) - 1:
+                    student_layers.append(nn.Linear(student_decoder_dims[layer_index], latent_dim * 2))
+                else:
+                    student_layers.append(nn.Linear(student_decoder_dims[layer_index], student_decoder_dims[layer_index + 1]))
+                    student_layers.append(activation)
+            self.student_prior = nn.Sequential(*student_layers)
         # # Initialize prior weights with Xavier uniform
         # for layer in self.student_prior:
         #     if isinstance(layer, nn.Linear):
@@ -146,20 +146,25 @@ class StudentTeacher(nn.Module):
         return self.distribution.entropy().sum(dim=-1)
 
     def update_distribution(self, observations):
-        vae_obs = observations[..., :self.vae_obs_shape]
-        mean_logvar = self.student_encoder(vae_obs)
-        mean, logvar = torch.split(mean_logvar, [self.latent_dim, self.latent_dim], dim=-1)
-
-        # prior_obs = observations[..., self.vae_obs_shape:]
-        # prior_mean_logvar = self.student_prior(prior_obs)
-        # prior_mean, prior_logvar = torch.split(prior_mean_logvar, [self.latent_dim, self.latent_dim], dim=-1)
-
-        std = torch.exp(0.5 * logvar)
-        self.distribution = Normal(mean, std)
-
-        # prior_std = torch.exp(0.5 * prior_logvar)
-        # self.prior_distribution = Normal(prior_mean, prior_std)
-
+        if self.use_learnable_prior:
+            prior_obs = observations[..., self.vae_obs_shape:]
+            prior_mean_logvar = self.student_prior(prior_obs)
+            prior_mean, prior_logvar = torch.split(prior_mean_logvar, [self.latent_dim, self.latent_dim], dim=-1)
+            prior_std = torch.exp(0.5 * prior_logvar)
+            self.prior_distribution = Normal(prior_mean, prior_std)
+            vae_obs = observations[..., :self.vae_obs_shape]
+            # vae_obs = observations
+            mean_logvar = self.student_encoder(vae_obs)
+            mean, logvar = torch.split(mean_logvar, [self.latent_dim, self.latent_dim], dim=-1)
+            std = torch.exp(0.5 * logvar)
+            self.distribution = Normal(mean + prior_mean, std)
+        else:
+            vae_obs = observations[..., :self.vae_obs_shape]
+            # vae_obs = observations
+            mean_logvar = self.student_encoder(vae_obs)
+            mean, logvar = torch.split(mean_logvar, [self.latent_dim, self.latent_dim], dim=-1)
+            std = torch.exp(0.5 * logvar)
+            self.distribution = Normal(mean, std)
     def act(self, observations):
         self.update_distribution(observations)
         z = self.distribution.rsample()

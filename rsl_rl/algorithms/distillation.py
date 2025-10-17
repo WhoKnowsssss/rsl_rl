@@ -25,8 +25,8 @@ class Distillation:
         num_learning_epochs=1,
         gradient_length=15,
         learning_rate=5e-4,
-        kl_coeff_start=1e-3,
-        kl_coeff_end=1e-4,
+        kl_coeff_start=1e-2,
+        kl_coeff_end=1e-3,
         consistency_coeff=0.005,
         loss_type="mse",
         device="cpu",
@@ -35,6 +35,7 @@ class Distillation:
     ):
         # device-related parameters
         self.device = device
+        self.use_learnable_prior = policy.use_learnable_prior
         self.is_multi_gpu = multi_gpu_cfg is not None
         # Multi-GPU parameters
         if multi_gpu_cfg is not None:
@@ -50,10 +51,16 @@ class Distillation:
         self.policy = policy
         self.policy.to(self.device)
         self.storage = None  # initialized later
-        self.optimizer = optim.AdamW(
-            list(self.policy.student_encoder.parameters()) + list(self.policy.student_decoder.parameters()), 
-            lr=learning_rate
-        )
+        if self.use_learnable_prior:
+            self.optimizer = optim.AdamW(
+                list(self.policy.student_encoder.parameters()) + list(self.policy.student_decoder.parameters()) + list(self.policy.student_prior.parameters()),
+                lr=learning_rate
+            )
+        else:
+            self.optimizer = optim.AdamW(
+                list(self.policy.student_encoder.parameters()) + list(self.policy.student_decoder.parameters()),
+                lr=learning_rate
+            )
         self.transition = RolloutStorage.Transition()
         self.last_hidden_states = None
 
@@ -83,14 +90,12 @@ class Distillation:
         Q, Rd, Rd_pseudo, Q_Rd, Q_Rd_pseudo, Q_Rd_pseudo_rot6d, num_bodies = get_reflect_reps(BODY_NAMES, JOINT_NAMES)
 
         Q_Rd_pseudo = Q_Rd_pseudo.view(num_bodies, 3, num_bodies, 3)
-        Q_Rd = Q_Rd.view(num_bodies, 3, num_bodies, 3)
-        
-        # obs_reflect_reps = [Q] * 10 + [Rd] * 1 + [Rd, Rd_pseudo] * 1 + [Rd] + [Rd_pseudo] * 2 + [Q] * 3
+        # Q_Rd = Q_Rd.view(num_bodies, 3, num_bodies, 3)
+        # obs_reflect_reps = [Q] * 6 + [Rd] * 3 + [Rd, Rd_pseudo] * 3 + [Rd] + [Rd_pseudo] * 2 + [Q] * 3
         # # first line: encoder, second line: decoder and prior
-
-        Q_Rd = Q_Rd.view(num_bodies* 3, num_bodies* 3)
-        obs_reflect_reps = [Q] * 10 + [Rd] * 1 + [Rd, Rd_pseudo] * 1 + [Q_Rd] + [Q_Rd_pseudo_rot6d] + [Rd] + [Rd_pseudo] + [Q] * 3 \
-                         + [Rd] + [Rd_pseudo] * 2 + [Q] * 3
+        # Q_Rd = Q_Rd.view(num_bodies* 3, num_bodies* 3)
+        obs_reflect_reps = [Q] * 10 + [Rd] * 1 \
+                         + [Rd_pseudo] * 2 + [Q] * 3
         # note: for rot6d, use [Rd, Rd_pseudo] to reflect
         action_reflect_reps = [Q]
 
@@ -144,14 +149,24 @@ class Distillation:
         self.storage.add_transitions(self.transition)
         self.transition.clear()
         self.policy.reset(dones)
-
+    # def vae_losses(
+    #     self,
+    #     mu, logvar
+    # ):
+    #     kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+    #     return kl_loss
     def vae_losses(
-        self,
-        mu, logvar
-    ):
-        kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
+            self, mu, logvar, prior_mu=None, prior_logvar=None
+        ):
+        if prior_mu is None:
+            prior_mu = torch.zeros_like(mu)
+        if prior_logvar is None:
+            prior_logvar = torch.zeros_like(logvar)
+        # KL divergence between two Gaussians
+        kl_loss = 0.5 * torch.mean(
+            prior_logvar - logvar + (torch.exp(logvar) + (mu - prior_mu).pow(2)) / torch.exp(prior_logvar) - 1
+        )
         return kl_loss
-
     def consistency_losses(
         self,
         last_u, current_u
@@ -173,7 +188,6 @@ class Distillation:
         mean_behavior_loss = 0
         loss = 0
         cnt = 0
-
         self.update_kl_coeff(current_learning_iteration, total_iterations)
 
         for epoch in range(self.num_learning_epochs):
@@ -186,8 +200,15 @@ class Distillation:
                 obs, privileged_actions = self.symmetric_augment(obs, privileged_actions)
                 # inference the student for gradient computation
                 actions = self.policy.act(obs)
-
-                vae_loss = self.vae_losses(self.policy.action_mean, 2 * torch.log(self.policy.action_std + 1e-6))
+                if self.use_learnable_prior:
+                    vae_loss = self.vae_losses(
+                        self.policy.action_mean,
+                        2 * torch.log(self.policy.action_std + 1e-6),
+                        self.policy.prior_mean,
+                        2 * torch.log(self.policy.prior_std + 1e-6)
+                    )
+                else:
+                    vae_loss = self.vae_losses(self.policy.action_mean, 2 * torch.log(self.policy.action_std + 1e-6))
                 consistency_loss = self.consistency_losses(self.policy.last_u, self.policy.action_mean)
 
                 # behavior cloning loss
