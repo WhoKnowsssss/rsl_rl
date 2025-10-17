@@ -89,6 +89,18 @@ class StudentTeacher(nn.Module):
                 student_layers.append(activation)
         self.student_decoder = nn.Sequential(*student_layers)
 
+        # student_layers = []
+        # student_layers.append(nn.Linear(mlp_input_dim_s - vae_obs_shape, student_decoder_dims[0]))
+        # # student_layers.append(nn.Linear(mlp_input_dim_s, student_decoder_dims[0]))
+        # student_layers.append(activation)
+        # for layer_index in range(len(student_decoder_dims)):
+        #     if layer_index == len(student_decoder_dims) - 1:
+        #         student_layers.append(nn.Linear(student_decoder_dims[layer_index], latent_dim * 2))
+        #     else:
+        #         student_layers.append(nn.Linear(student_decoder_dims[layer_index], student_decoder_dims[layer_index + 1]))
+        #         student_layers.append(activation)
+        # self.student_prior = nn.Sequential(*student_layers)
+
         # teacher
         teacher_layers = []
         teacher_layers.append(nn.Linear(mlp_input_dim_t - 1, teacher_hidden_dims[0]))
@@ -144,6 +156,14 @@ class StudentTeacher(nn.Module):
     @property
     def entropy(self):
         return self.distribution.entropy().sum(dim=-1)
+    
+    @property
+    def prior_mean(self):
+        return self.prior_distribution.mean
+
+    @property
+    def prior_std(self):
+        return self.prior_distribution.stddev
 
     def update_distribution(self, observations):
         if self.use_learnable_prior:
