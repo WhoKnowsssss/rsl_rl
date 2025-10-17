@@ -25,8 +25,8 @@ class Distillation:
         num_learning_epochs=1,
         gradient_length=15,
         learning_rate=5e-4,
-        kl_coeff_start=1e-3,
-        kl_coeff_end=1e-4,
+        kl_coeff_start=5e-2,
+        kl_coeff_end=5e-3,
         consistency_coeff=0.005,
         loss_type="mse",
         device="cpu",
@@ -83,12 +83,12 @@ class Distillation:
         Q, Rd, Rd_pseudo, Q_Rd, Q_Rd_pseudo, Q_Rd_pseudo_rot6d, num_bodies = get_reflect_reps(BODY_NAMES, JOINT_NAMES)
 
         Q_Rd_pseudo = Q_Rd_pseudo.view(num_bodies, 3, num_bodies, 3)
-        Q_Rd = Q_Rd.view(num_bodies, 3, num_bodies, 3)
+        # Q_Rd = Q_Rd.view(num_bodies, 3, num_bodies, 3)
         
-        # obs_reflect_reps = [Q] * 10 + [Rd] * 1 + [Rd, Rd_pseudo] * 1 + [Rd] + [Rd_pseudo] * 2 + [Q] * 3
+        # obs_reflect_reps = [Q] * 6 + [Rd] * 3 + [Rd, Rd_pseudo] * 3 + [Rd] + [Rd_pseudo] * 2 + [Q] * 3
         # # first line: encoder, second line: decoder and prior
 
-        Q_Rd = Q_Rd.view(num_bodies* 3, num_bodies* 3)
+        # Q_Rd = Q_Rd.view(num_bodies* 3, num_bodies* 3)
         obs_reflect_reps = [Q] * 10 + [Rd] * 1 + [Rd, Rd_pseudo] * 1 + [Q_Rd] + [Q_Rd_pseudo_rot6d] + [Rd] + [Rd_pseudo] + [Q] * 3 \
                          + [Rd] + [Rd_pseudo] * 2 + [Q] * 3
         # note: for rot6d, use [Rd, Rd_pseudo] to reflect
@@ -151,6 +151,20 @@ class Distillation:
     ):
         kl_loss = -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp())
         return kl_loss
+
+
+    # def vae_losses(
+    #         self, mu, logvar, prior_mu=None, prior_logvar=None
+    #     ):
+    #     if prior_mu is None:
+    #         prior_mu = torch.zeros_like(mu)
+    #     if prior_logvar is None:
+    #         prior_logvar = torch.zeros_like(logvar)
+    #     # KL divergence between two Gaussians
+    #     kl_loss = 0.5 * torch.mean(
+    #         prior_logvar - logvar + (torch.exp(logvar) + (mu - prior_mu).pow(2)) / torch.exp(prior_logvar) - 1
+    #     )
+    #     return kl_loss
 
     def consistency_losses(
         self,
